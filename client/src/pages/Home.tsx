@@ -2,7 +2,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { MessageCircle, Send, Trash2, Plus, Loader2 } from "lucide-react";
@@ -27,7 +26,8 @@ export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [inputMessage, setInputMessage] = useState("");
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const utils = trpc.useUtils();
 
   // Queries
@@ -77,12 +77,9 @@ export default function Home() {
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (scrollRef.current) {
-      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight;
-      }
-    }
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 0);
   }, [messages, sendMessage.isPending]);
 
   // Select first conversation on load
@@ -158,7 +155,7 @@ export default function Home() {
         {/* Main Content */}
         <div className="flex-1 flex bg-white shadow-md overflow-hidden">
           {/* Sidebar - Conversations List */}
-          <div className="w-64 border-r border-border flex flex-col">
+          <div className="w-64 border-r border-border flex flex-col overflow-hidden">
             <div className="p-4 border-b border-border">
               <Button onClick={handleNewConversation} className="w-full" disabled={createConversation.isPending}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -166,7 +163,7 @@ export default function Home() {
               </Button>
             </div>
 
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-y-auto">
               <div className="p-2 space-y-2">
                 {loadingConversations ? (
                   <div className="flex justify-center p-4">
@@ -207,15 +204,21 @@ export default function Home() {
                   ))
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </div>
 
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col overflow-hidden">
             {selectedConversationId ? (
               <>
                 {/* Messages */}
-                <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+                <div
+                  ref={messagesContainerRef}
+                  className="flex-1 overflow-y-auto p-4"
+                  style={{
+                    scrollBehavior: "smooth",
+                  }}
+                >
                   {loadingMessages ? (
                     <div className="flex justify-center p-8">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -252,9 +255,10 @@ export default function Home() {
                           </div>
                         </div>
                       )}
+                      <div ref={messagesEndRef} />
                     </div>
                   )}
-                </ScrollArea>
+                </div>
 
                 {/* Input Area */}
                 <div className="border-t border-border p-4">
