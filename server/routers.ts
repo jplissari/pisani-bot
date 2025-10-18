@@ -58,7 +58,7 @@ export const appRouter = router({
           content: z.string(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
           // Save user message
           const userMessage = await db.createMessage({
@@ -71,11 +71,34 @@ export const appRouter = router({
           // Get conversation history
           const history = await db.getMessagesByConversationId(input.conversationId);
           
+          // Get active documents and system contexts for the user
+          const userDocuments = await db.getActiveDocumentsByUserId(ctx.user.id);
+          const userSystemContexts = await db.getActiveSystemContextsByUserId(ctx.user.id);
+          
+          // Build system prompt with documents and contexts
+          let systemPrompt = "Você é um assistente útil e amigável. Responda em português brasileiro.";
+          
+          // Add system contexts
+          if (userSystemContexts.length > 0) {
+            systemPrompt += "\n\n## Instruções Especiais:\n";
+            userSystemContexts.forEach((context) => {
+              systemPrompt += `\n${context.instructions}`;
+            });
+          }
+          
+          // Add documents as context
+          if (userDocuments.length > 0) {
+            systemPrompt += "\n\n## Documentos de Referência:\n";
+            userDocuments.forEach((doc) => {
+              systemPrompt += `\n### ${doc.title}\n${doc.content}\n`;
+            });
+          }
+          
           // Prepare messages for OpenAI
           const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             {
               role: "system",
-              content: "Você é um assistente útil e amigável. Responda em português brasileiro.",
+              content: systemPrompt,
             },
             ...history.map((msg) => ({
               role: msg.role as "user" | "assistant" | "system",
@@ -130,6 +153,116 @@ export const appRouter = router({
         await db.updateConversation(input.conversationId, {
           title: input.title,
         });
+        return { success: true };
+      }),
+  }),
+
+  documents: router({
+    // Get all documents for the current user
+    getDocuments: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getDocumentsByUserId(ctx.user.id);
+    }),
+
+    // Create a new document
+    createDocument: protectedProcedure
+      .input(
+        z.object({
+          title: z.string(),
+          content: z.string(),
+          fileUrl: z.string().optional(),
+          fileName: z.string().optional(),
+          mimeType: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return await db.createDocument({
+          id: randomUUID(),
+          userId: ctx.user.id,
+          title: input.title,
+          content: input.content,
+          fileUrl: input.fileUrl,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          isActive: "true",
+        });
+      }),
+
+    // Update a document
+    updateDocument: protectedProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          title: z.string().optional(),
+          content: z.string().optional(),
+          isActive: z.enum(["true", "false"]).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await db.updateDocument(input.id, {
+          title: input.title,
+          content: input.content,
+          isActive: input.isActive,
+        });
+        return { success: true };
+      }),
+
+    // Delete a document
+    deleteDocument: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input }) => {
+        await db.deleteDocument(input.id);
+        return { success: true };
+      }),
+  }),
+
+  systemContext: router({
+    // Get all system contexts for the current user
+    getContexts: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getSystemContextsByUserId(ctx.user.id);
+    }),
+
+    // Create a new system context
+    createContext: protectedProcedure
+      .input(
+        z.object({
+          title: z.string(),
+          instructions: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return await db.createSystemContext({
+          id: randomUUID(),
+          userId: ctx.user.id,
+          title: input.title,
+          instructions: input.instructions,
+          isActive: "true",
+        });
+      }),
+
+    // Update a system context
+    updateContext: protectedProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          title: z.string().optional(),
+          instructions: z.string().optional(),
+          isActive: z.enum(["true", "false"]).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await db.updateSystemContext(input.id, {
+          title: input.title,
+          instructions: input.instructions,
+          isActive: input.isActive,
+        });
+        return { success: true };
+      }),
+
+    // Delete a system context
+    deleteContext: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input }) => {
+        await db.deleteSystemContext(input.id);
         return { success: true };
       }),
   }),

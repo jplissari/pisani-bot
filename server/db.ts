@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, conversations, messages, InsertConversation, InsertMessage, Conversation, Message } from "../drizzle/schema";
+import { InsertUser, users, conversations, messages, InsertConversation, InsertMessage, Conversation, Message, documents, InsertDocument, Document, systemContexts, InsertSystemContext, SystemContext } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -144,4 +144,100 @@ export async function getMessagesByConversationId(conversationId: string): Promi
   }
 
   return await db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
+}
+
+// Document queries
+export async function createDocument(data: InsertDocument): Promise<Document> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.insert(documents).values(data);
+  const result = await db.select().from(documents).where(eq(documents.id, data.id!)).limit(1);
+  return result[0];
+}
+
+export async function getDocumentsByUserId(userId: string): Promise<Document[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db.select().from(documents).where(eq(documents.userId, userId)).orderBy(documents.createdAt);
+}
+
+export async function getActiveDocumentsByUserId(userId: string): Promise<Document[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db.select().from(documents).where(and(eq(documents.userId, userId), eq(documents.isActive, "true"))).orderBy(documents.createdAt);
+}
+
+export async function updateDocument(id: string, data: Partial<InsertDocument>): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.update(documents).set({ ...data, updatedAt: new Date() }).where(eq(documents.id, id));
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.delete(documents).where(eq(documents.id, id));
+}
+
+// System Context queries
+export async function createSystemContext(data: InsertSystemContext): Promise<SystemContext> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.insert(systemContexts).values(data);
+  const result = await db.select().from(systemContexts).where(eq(systemContexts.id, data.id!)).limit(1);
+  return result[0];
+}
+
+export async function getSystemContextsByUserId(userId: string): Promise<SystemContext[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db.select().from(systemContexts).where(eq(systemContexts.userId, userId)).orderBy(systemContexts.createdAt);
+}
+
+export async function getActiveSystemContextsByUserId(userId: string): Promise<SystemContext[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db.select().from(systemContexts).where(and(eq(systemContexts.userId, userId), eq(systemContexts.isActive, "true"))).orderBy(systemContexts.createdAt);
+}
+
+export async function updateSystemContext(id: string, data: Partial<InsertSystemContext>): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.update(systemContexts).set({ ...data, updatedAt: new Date() }).where(eq(systemContexts.id, id));
+}
+
+export async function deleteSystemContext(id: string): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.delete(systemContexts).where(eq(systemContexts.id, id));
 }
