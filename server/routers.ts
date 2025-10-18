@@ -59,54 +59,60 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        // Save user message
-        const userMessage = await db.createMessage({
-          id: randomUUID(),
-          conversationId: input.conversationId,
-          role: "user",
-          content: input.content,
-        });
+        try {
+          // Save user message
+          const userMessage = await db.createMessage({
+            id: randomUUID(),
+            conversationId: input.conversationId,
+            role: "user",
+            content: input.content,
+          });
 
-        // Get conversation history
-        const history = await db.getMessagesByConversationId(input.conversationId);
-        
-        // Prepare messages for OpenAI
-        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-          {
-            role: "system",
-            content: "Você é um assistente útil e amigável. Responda em português brasileiro.",
-          },
-          ...history.map((msg) => ({
-            role: msg.role as "user" | "assistant" | "system",
-            content: msg.content,
-          })),
-        ];
+          // Get conversation history
+          const history = await db.getMessagesByConversationId(input.conversationId);
+          
+          // Prepare messages for OpenAI
+          const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+            {
+              role: "system",
+              content: "Você é um assistente útil e amigável. Responda em português brasileiro.",
+            },
+            ...history.map((msg) => ({
+              role: msg.role as "user" | "assistant" | "system",
+              content: msg.content,
+            })),
+          ];
 
-        // Call OpenAI API
-        const completion = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
-          messages,
-        });
+          // Call OpenAI API
+          console.log("[Chat] Calling OpenAI API...");
+          const completion = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages,
+          });
 
-        const assistantContent = completion.choices[0].message.content || "Desculpe, não consegui gerar uma resposta.";
+          const assistantContent = completion.choices[0].message.content || "Desculpe, não consegui gerar uma resposta.";
 
-        // Save assistant message
-        const assistantMessage = await db.createMessage({
-          id: randomUUID(),
-          conversationId: input.conversationId,
-          role: "assistant",
-          content: assistantContent,
-        });
+          // Save assistant message
+          const assistantMessage = await db.createMessage({
+            id: randomUUID(),
+            conversationId: input.conversationId,
+            role: "assistant",
+            content: assistantContent,
+          });
 
-        // Update conversation timestamp
-        await db.updateConversation(input.conversationId, {
-          updatedAt: new Date(),
-        });
+          // Update conversation timestamp
+          await db.updateConversation(input.conversationId, {
+            updatedAt: new Date(),
+          });
 
-        return {
-          userMessage,
-          assistantMessage,
-        };
+          return {
+            userMessage,
+            assistantMessage,
+          };
+        } catch (error) {
+          console.error("[Chat] Error in sendMessage:", error);
+          throw error;
+        }
       }),
 
     // Delete a conversation
