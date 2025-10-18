@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, conversations, messages, InsertConversation, InsertMessage, Conversation, Message } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -85,4 +85,63 @@ export async function getUser(id: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Conversation queries
+export async function createConversation(data: InsertConversation): Promise<Conversation> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.insert(conversations).values(data);
+  const result = await db.select().from(conversations).where(eq(conversations.id, data.id!)).limit(1);
+  return result[0];
+}
+
+export async function getConversationsByUserId(userId: string): Promise<Conversation[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db.select().from(conversations).where(eq(conversations.userId, userId)).orderBy(conversations.updatedAt);
+}
+
+export async function updateConversation(id: string, data: Partial<InsertConversation>): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.update(conversations).set({ ...data, updatedAt: new Date() }).where(eq(conversations.id, id));
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.delete(messages).where(eq(messages.conversationId, id));
+  await db.delete(conversations).where(eq(conversations.id, id));
+}
+
+// Message queries
+export async function createMessage(data: InsertMessage): Promise<Message> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db.insert(messages).values(data);
+  const result = await db.select().from(messages).where(eq(messages.id, data.id!)).limit(1);
+  return result[0];
+}
+
+export async function getMessagesByConversationId(conversationId: string): Promise<Message[]> {
+  const db = await getDb();
+  if (!db) {
+    return [];
+  }
+
+  return await db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
+}
