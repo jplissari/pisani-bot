@@ -141,69 +141,49 @@ export const appRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         try {
-          // Save user message
-          const userMessage = await db.createMessage({
-            id: randomUUID(),
-            conversationId: input.conversationId,
-            role: "user",
-            content: input.content,
-          });
+          // Note: User message is already saved in the history
+          // We don't need to save it again since it's in the messages array
 
           // Get conversation history
           const history = await db.getMessagesByConversationId(input.conversationId);
           
-          // Get active documents and system contexts for the user
-          let userDocuments = await db.getActiveDocumentsByUserId(ctx.user.id);
-          let userSystemContexts = await db.getActiveSystemContextsByUserId(ctx.user.id);
+          // Always use default Pisani context and catalog
+          // These are the default contexts for all users
+          const userDocuments = [{
+            id: "default-pisani-catalog",
+            userId: ctx.user.id,
+            title: "Catálogo Pisani 2024",
+            content: DEFAULT_PISANI_CATALOG,
+            isActive: "true",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }];
           
-          // If no documents exist, add default Pisani catalog
-          if (userDocuments.length === 0) {
-            try {
-              const defaultDoc = await db.createDocument({
-                id: randomUUID(),
-                userId: ctx.user.id,
-                title: "Catálogo Pisani 2024",
-                content: DEFAULT_PISANI_CATALOG,
-                isActive: "true",
-              });
-              userDocuments = [defaultDoc];
-            } catch (e) {
-              console.log("Could not create default document");
-            }
-          }
+          const userSystemContexts = [{
+            id: "default-pisani-prompt",
+            userId: ctx.user.id,
+            title: "Representante Comercial Pisani",
+            instructions: DEFAULT_PISANI_PROMPT,
+            isActive: "true",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }];
           
-          // If no system contexts exist, add default Pisani prompt
-          if (userSystemContexts.length === 0) {
-            try {
-              const defaultContext = await db.createSystemContext({
-                id: randomUUID(),
-                userId: ctx.user.id,
-                title: "Representante Comercial Pisani",
-                instructions: DEFAULT_PISANI_PROMPT,
-                isActive: "true",
-              });
-              userSystemContexts = [defaultContext];
-            } catch (e) {
-              console.log("Could not create default system context");
-            }
-          }
+          // Build system prompt with Pisani context
+          let systemPrompt = "";
           
-          // Build system prompt with documents and contexts
-          let systemPrompt = "Você é um assistente útil e amigável. Responda em português brasileiro.";
-          
-          // Add system contexts
+          // Add system contexts (Pisani instructions)
           if (userSystemContexts.length > 0) {
-            systemPrompt += "\n\n## Instruções Especiais:\n";
             userSystemContexts.forEach((context) => {
-              systemPrompt += `\n${context.instructions}`;
+              systemPrompt += context.instructions;
             });
           }
           
-          // Add documents as context
+          // Add documents as context (Pisani catalog)
           if (userDocuments.length > 0) {
-            systemPrompt += "\n\n## Documentos de Referência:\n";
+            systemPrompt += "\n\n## CATÁLOGO E INFORMAÇÕES PISANI:\n";
             userDocuments.forEach((doc) => {
-              systemPrompt += `\n### ${doc.title}\n${doc.content}\n`;
+              systemPrompt += `\n${doc.content}\n`;
             });
           }
           
@@ -217,13 +197,20 @@ export const appRouter = router({
               role: msg.role as "user" | "assistant" | "system",
               content: msg.content,
             })),
+            {
+              role: "user",
+              content: input.content,
+            },
           ];
 
           // Call OpenAI API
           console.log("[Chat] Calling OpenAI API...");
+          console.log("[Chat] System prompt length:", systemPrompt.length);
           const completion = await openai.chat.completions.create({
             model: "gpt-3.5-turbo",
             messages,
+            temperature: 0.7,
+            max_tokens: 1000,
           });
 
           const assistantContent = completion.choices[0].message.content || "Desculpe, não consegui gerar uma resposta.";
@@ -242,7 +229,6 @@ export const appRouter = router({
           });
 
           return {
-            userMessage,
             assistantMessage,
           };
         } catch (error) {
